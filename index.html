@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,9 +9,9 @@
 <meta name="description" content="GovAI — an AI assistant for Uzbekistan's public sector, built for a sovereign deployment.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script>
-  // Apply saved theme before paint to avoid a flash.
+  // Dark by default; a saved choice from the toggle wins. Applied before paint to avoid a flash.
   try { var t = localStorage.getItem('govai-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
 </script>
 <style>
@@ -27,6 +27,9 @@
     --btn: #121212;
     --btn-fg: #f4f3ef;
     --globe: 18, 18, 18;
+    --ascii: #1a1a18;
+    --ascii-mark: #3a3a36;
+    --ascii-weight: 700;
     --radius: 6px;
     --max: 1240px;
     color-scheme: light;
@@ -44,6 +47,9 @@
       --btn: #ecebe6;
       --btn-fg: #0d0e0d;
       --globe: 236, 235, 230;
+      --ascii: #a3a39c;
+      --ascii-mark: #6a6a64;
+      --ascii-weight: 500;
       color-scheme: dark;
     }
   }
@@ -59,6 +65,9 @@
     --btn: #ecebe6;
     --btn-fg: #0d0e0d;
     --globe: 236, 235, 230;
+    --ascii: #a3a39c;
+    --ascii-mark: #6a6a64;
+    --ascii-weight: 500;
     color-scheme: dark;
   }
 
@@ -127,7 +136,15 @@
   .hero p { color: var(--fg-muted); font-size: 17px; max-width: 470px; margin: 0 0 32px; }
   .hero-ctas { display: flex; gap: 16px; flex-wrap: wrap; }
   .globe-wrap { position: relative; aspect-ratio: 1; width: 100%; max-width: 560px; justify-self: end; }
-  #globe { width: 100%; height: 100%; display: block; }
+  .globe-wrap { container-type: inline-size; display: grid; place-items: center; }
+  #globe {
+    margin: 0; font: var(--ascii-weight) calc(100cqi / 58)/1.2 "JetBrains Mono", ui-monospace, monospace;
+    color: var(--ascii); white-space: pre; user-select: none; letter-spacing: 0;
+  }
+  .ascii-mark {
+    margin: 0 0 40px; font: var(--ascii-weight) clamp(7px, 1.9vw, 18px)/1.15 "JetBrains Mono", ui-monospace, monospace;
+    color: var(--ascii-mark); white-space: pre; overflow: hidden; user-select: none;
+  }
   .badge {
     display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px;
     font-size: 12px; color: var(--fg-muted); border: 1px solid var(--line);
@@ -262,7 +279,7 @@
           <a href="#capabilities" class="btn btn-ghost">See capabilities <span class="arr">→</span></a>
         </div>
       </div>
-      <div class="globe-wrap" aria-hidden="true"><canvas id="globe"></canvas></div>
+      <div class="globe-wrap" aria-hidden="true"><pre id="globe"></pre></div>
     </div>
     <div class="video reveal">
       <video src="govai-demo.mp4" poster="govai-demo-poster.jpg" controls playsinline preload="metadata"></video>
@@ -387,6 +404,12 @@
 </main>
 
 <footer>
+  <div class="wrap"><pre class="ascii-mark" aria-label="GovAI"> ██████╗  ██████╗ ██╗   ██╗ █████╗ ██╗
+██╔════╝ ██╔═══██╗██║   ██║██╔══██╗██║
+██║  ███╗██║   ██║██║   ██║███████║██║
+██║   ██║██║   ██║╚██╗ ██╔╝██╔══██║██║
+╚██████╔╝╚██████╔╝ ╚████╔╝ ██║  ██║██║
+ ╚═════╝  ╚═════╝   ╚═══╝  ╚═╝  ╚═╝╚═╝</pre></div>
   <div class="wrap foot">
     <span class="logo"><span class="logo-mark">G</span>GovAI</span>
     <span>Built for a sovereign deployment, honest about the distance still to cover.</span>
@@ -423,66 +446,77 @@
     document.getElementById('form-note').textContent = 'Thanks. Form submission is not wired to a backend yet.';
   });
 
-  // Globe: rotating point sphere with orbiting rings
+  // Globe: ASCII-rendered sphere with orbiting rings
   (function () {
-    var canvas = document.getElementById('globe');
-    var ctx = canvas.getContext('2d');
+    var pre = document.getElementById('globe');
     var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var pts = [], N = 900, golden = Math.PI * (3 - Math.sqrt(5));
-    for (var i = 0; i < N; i++) {
-      var y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), th = golden * i;
-      pts.push([Math.cos(th) * r, y, Math.sin(th) * r]);
-    }
-    var size, dpr;
-    function resize() {
-      dpr = Math.min(devicePixelRatio || 1, 2);
-      size = canvas.clientWidth;
-      canvas.width = canvas.height = size * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    resize(); addEventListener('resize', resize);
-    var mx = 0, my = 0;
+    var COLS = 96, ROWS = 48, R = .62;              // a char cell is ~2:1, so ROWS = COLS / 2 keeps it round
+    var RAMP = ' .`:-=+*%#@';
+    var L = [-.35, -.4, .85], ll = Math.hypot(L[0], L[1], L[2]);
+    L = [L[0] / ll, L[1] / ll, L[2] / ll];
+    var mx = 0, my = 0, last = 0;
     addEventListener('pointermove', function (e) {
-      mx = (e.clientX / innerWidth - .5) * .4; my = (e.clientY / innerHeight - .5) * .3;
+      mx = (e.clientX / innerWidth - .5) * .5; my = (e.clientY / innerHeight - .5) * .3;
     });
-    function rgb() { return getComputedStyle(document.documentElement).getPropertyValue('--globe').trim(); }
     function frame(t) {
-      var c = rgb(), cx = size / 2, cy = size / 2, R = size * .36;
-      ctx.clearRect(0, 0, size, size);
-      var a = t * .00012 + mx, tilt = -.35 + my;
-      var ca = Math.cos(a), sa = Math.sin(a), ct = Math.cos(tilt), st = Math.sin(tilt);
-      for (var i = 0; i < N; i++) {
-        var p = pts[i];
-        var x = p[0] * ca + p[2] * sa, z = -p[0] * sa + p[2] * ca;
-        var y = p[1] * ct - z * st; z = p[1] * st + z * ct;
-        var depth = (z + 1) / 2;
-        ctx.fillStyle = 'rgba(' + c + ',' + (0.08 + depth * 0.75).toFixed(3) + ')';
-        var s = 0.6 + depth * 1.4;
-        ctx.fillRect(cx + x * R - s / 2, cy + y * R - s / 2, s, s);
-      }
-      // orbit rings
-      for (var k = 0; k < 3; k++) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(-.5 + k * .55 + t * .00004 * (k % 2 ? -1 : 1));
-        ctx.beginPath();
-        ctx.ellipse(0, 0, R * (1.22 + k * .1), R * (.22 + k * .07), 0, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(' + c + ',' + (.22 - k * .05) + ')';
-        ctx.lineWidth = 1;
-        ctx.setLineDash(k === 1 ? [2, 6] : []);
-        ctx.stroke();
-        // satellite
-        var ang = t * .0006 * (k + 1) + k * 2;
-        ctx.beginPath();
-        ctx.arc(Math.cos(ang) * R * (1.22 + k * .1), Math.sin(ang) * R * (.22 + k * .07), 2.4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(' + c + ',.9)';
-        ctx.fill();
-        ctx.restore();
-      }
       if (!reduce) requestAnimationFrame(frame);
+      if (t - last < 33) return;                     // ~30fps is plenty for text
+      last = t;
+      var a = t * .00025 + mx, tilt = -.4 + my;
+      var ca = Math.cos(a), sa = Math.sin(a), ct = Math.cos(tilt), st = Math.sin(tilt);
+      var grid = [], depth = [];
+      for (var y = 0; y < ROWS; y++) {
+        grid.push(new Array(COLS).fill(' '));
+        depth.push(new Array(COLS).fill(-9));
+        var sy = ((y + .5) / ROWS) * 2 - 1;
+        for (var x = 0; x < COLS; x++) {
+          var sx = ((x + .5) / COLS) * 2 - 1;
+          var d2 = sx * sx + sy * sy;
+          if (d2 > R * R) continue;
+          var px = sx / R, py = sy / R, pz = Math.sqrt(Math.max(0, 1 - px * px - py * py));
+          // undo tilt (x axis) then spin (y axis) to get texture coords
+          var qy = py * ct + pz * st, qz = -py * st + pz * ct;
+          var rx = px * ca - qz * sa, rz = px * sa + qz * ca;
+          var lat = Math.asin(Math.max(-1, Math.min(1, qy))), lon = Math.atan2(rx, rz);
+          var gl = Math.abs(((lat / (Math.PI / 9)) % 1 + 1) % 1 - .5);
+          var gn = Math.abs(((lon / (Math.PI / 9)) % 1 + 1) % 1 - .5);
+          var line = gl > .4 || gn > .43;
+          var lambert = Math.max(0, px * L[0] + py * L[1] + pz * L[2]);
+          var b = (line ? .45 : .16) + lambert * (line ? .55 : .32);
+          grid[y][x] = RAMP[Math.min(RAMP.length - 1, Math.round(b * (RAMP.length - 1)))];
+          depth[y][x] = pz;
+        }
+      }
+      // orbit rings: points in front of the sphere draw over it, ones behind are hidden
+      for (var k = 0; k < 3; k++) {
+        var rot = -.5 + k * .55 + t * .00006 * (k % 2 ? -1 : 1);
+        var rxr = R * (1.3 + k * .1), ryr = R * (.24 + k * .08);
+        var cr = Math.cos(rot), sr = Math.sin(rot);
+        var sat = t * .0007 * (k + 1) + k * 2;
+        for (var i = 0; i < 360; i++) {
+          var th = (i / 360) * Math.PI * 2;
+          var ex = Math.cos(th) * rxr, ey = Math.sin(th) * ryr;
+          var X = ex * cr - ey * sr, Y = ex * sr + ey * cr;
+          var gx = Math.floor((X + 1) / 2 * COLS), gy = Math.floor((Y + 1) / 2 * ROWS);
+          if (gx < 0 || gy < 0 || gx >= COLS || gy >= ROWS) continue;
+          var front = Math.sin(th) > 0;
+          if (!front && depth[gy][gx] > -9) continue;
+          if (k === 1 && i % 3) continue;
+          grid[gy][gx] = front ? (k === 1 ? '·' : '-') : '.';
+        }
+        var SX = Math.cos(sat) * rxr, SY = Math.sin(sat) * ryr;
+        var px2 = Math.floor((SX * cr - SY * sr + 1) / 2 * COLS), py2 = Math.floor((SX * sr + SY * cr + 1) / 2 * ROWS);
+        if (px2 >= 0 && py2 >= 0 && px2 < COLS && py2 < ROWS && (Math.sin(sat) > 0 || depth[py2][px2] === -9)) grid[py2][px2] = '@';
+      }
+      pre.textContent = grid.map(function (r) { return r.join(''); }).join('\n');
     }
     requestAnimationFrame(frame);
+    if (reduce) frame(1000);
   })();
+
+  // Console banner
+  console.log('%c' + document.querySelector('.ascii-mark').textContent + '\n  An AI assistant for public service. Want to build it with us? gov-ai.me',
+    'font-family: monospace; color: #0b6b4f');
 </script>
 </body>
 </html>
